@@ -2,6 +2,7 @@
 import bitcoin from 'bitcoinjs-lib';
 import coinSelect from 'coinselect';
 import { find, range } from 'lodash';
+import typeforce from 'typeforce';
 
 import HDWallet from '../hdWallet';
 import * as apiServices from '../apiServices';
@@ -18,6 +19,9 @@ const getNetwork = testnet => (testnet ? bitcoin.networks.testnet : bitcoin.netw
  */
 class BitcoinHDWallet extends HDWallet {
   constructor({ mnemonics, testnet = true }) {
+    typeforce('String', mnemonics);
+    typeforce('Boolean', testnet);
+
     const {
       code, coinType, name, units, apis,
     } = testnet ? testnetConfig : mainnetConfig;
@@ -35,7 +39,10 @@ class BitcoinHDWallet extends HDWallet {
    * helper method for satoshi to bitcoin conversion
    * @memberof BitcoinHDWallet
    */
-  convertSatoshisToBitcoins = satoshis => satoshis / this.units.value;
+  convertSatoshisToBitcoins = (satoshis) => {
+    typeforce('Number', satoshis);
+    return satoshis / this.units.value;
+  };
 
   /**
    * Get addressNode from HDWallet base class implementation
@@ -43,6 +50,7 @@ class BitcoinHDWallet extends HDWallet {
    * @memberof BitcoinHDWallet
    */
   generateAddress = (addressNode) => {
+    typeforce('Object', addressNode);
     const wif = addressNode.toWIF();
     const keyPair = bitcoin.ECPair.fromWIF(wif, this.network);
     const { address } = bitcoin.payments.p2pkh({
@@ -114,6 +122,8 @@ class BitcoinHDWallet extends HDWallet {
    * @memberof BitcoinHDWallet
    */
   getBalanceForAccountXpubs = async (xpubs = []) => {
+    typeforce(['String'], xpubs);
+    if (xpubs.length === 0) return 0;
     const { success, data, error } = await apiServices.get(
       `${this.apis.addressesInfo}?active=${xpubs.join('|')}`,
     );
@@ -134,6 +144,12 @@ class BitcoinHDWallet extends HDWallet {
    * @memberof BitcoinHDWallet
    */
   getMiningFeeRate = async (variant = 'fastestFee') => {
+    typeforce('String', variant);
+    const variants = ['fastestFee', 'halfHourFee', 'hourFee'];
+    if (!variants.includes(variant)) {
+      throw new TypeError(`variant must be one of ${variants.join(', ')}`);
+    }
+
     const { success, data, error } = await apiServices.get(this.apis.minigFee);
     if (!success) {
       throw new Error(error);

@@ -1,5 +1,6 @@
 import bip32 from 'bip32';
 import bip39 from 'bip39';
+import typeforce from 'typeforce';
 
 import { PURPOSE } from '../constants';
 
@@ -10,6 +11,10 @@ import { PURPOSE } from '../constants';
  */
 class HDWallet {
   constructor({ mnemonics, network, coinType }) {
+    typeforce('String', mnemonics);
+    typeforce('Object', network);
+    typeforce('Number', coinType);
+
     this.mnemonics = mnemonics;
     this.network = network;
     this.coinType = coinType;
@@ -65,6 +70,7 @@ class HDWallet {
    * @memberof HDWallet
    */
   getAccountNode = ({ accountIndex }) => {
+    typeforce('Number', accountIndex);
     // equiv to m/44'/0'/0'
     const accountNode = this.coinTypeNodeObj.coinTypeNode.deriveHardened(accountIndex);
     const accountPublicKey = accountNode.neutered().toBase58();
@@ -89,6 +95,11 @@ class HDWallet {
   getAddressNode = ({
     accountNode = null, accountIndex, changeIndex = 0, addressIndex,
   }) => {
+    typeforce('?Object', accountNode);
+    typeforce('Number', accountIndex);
+    typeforce('Number', changeIndex);
+    typeforce('Number', addressIndex);
+
     let _accountNode = accountNode;
     if (!_accountNode) {
       _accountNode = this.coinTypeNodeObj.coinTypeNode.deriveHardened(accountIndex);
