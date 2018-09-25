@@ -127,14 +127,18 @@ class BitcoinHDWallet extends HDWallet {
 
   fetchUTXOs = async (addresses = []) => {};
 
-  getMiningFeeRate = async () => {
-    // using fastest minig fee to make sure transactions are confirmed at the earliest
+  /**
+   * Get mining fee rate
+   * variant can be one of "fastestFee", "halfHourFee", "hourFee"
+   * Make sure to include appropriate fee rate while creating transaction
+   * @memberof BitcoinHDWallet
+   */
+  getMiningFeeRate = async (variant = 'fastestFee') => {
     const { success, data, error } = await apiServices.get(this.apis.minigFee);
     if (!success) {
       throw new Error(error);
     }
-    // console.log(data)
-    return data;
+    return data[variant];
   };
 }
 
