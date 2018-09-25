@@ -24,6 +24,7 @@
     "bitcoinjs-lib": "^4.0.2",
     "coinselect": "^3.1.11",
     "lodash": "^4.17.11",
-    "moment": "^2.22.2"
+    "moment": "^2.22.2",
+    "typeforce": "^1.12.0"
   }
 }

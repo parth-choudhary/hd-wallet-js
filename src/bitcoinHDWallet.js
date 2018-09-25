@@ -1,4 +1,3 @@
-import bip39 from 'bip39';
 import bitcoin from 'bitcoinjs-lib';
 import coinSelect from 'coinselect';
 import { findIndex, range } from 'lodash';
@@ -6,7 +5,6 @@ import { findIndex, range } from 'lodash';
 import HDWallet from './hdWallet';
 import * as apiServices from './apiServices';
 import { getConfig } from './utils';
-import { PURPOSE, MAX_ACCOUNT_INDEX } from './constants';
 
 const getNetwork = testnet => (testnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
 
@@ -19,18 +17,33 @@ const getNetwork = testnet => (testnet ? bitcoin.networks.testnet : bitcoin.netw
  */
 class BitcoinHDWallet extends HDWallet {
   constructor({ mnemonics, testnet = true }) {
-    super({ mnemonics, network: getNetwork(testnet) });
+    super({ mnemonics, network: getNetwork(testnet), coinType: testnet ? 1 : 0 });
     const {
-      code, name, coinType, units, apis,
+      code, name, units, apis,
     } = getConfig(testnet ? 'TEST' : 'BTC');
     this.code = code;
     this.name = name;
-    this.coinType = coinType;
     this.units = units;
     this.apis = apis;
+    this.network = getNetwork(testnet);
   }
 
   convertSatoshisToBitcoins = satoshis => satoshis / this.units.value;
+
+  /**
+   * Get addressNode from HDWallet base implementation
+   * Generate wallet address from addressNode for bitcoin and family
+   * @memberof BitcoinHDWallet
+   */
+  generateAddress = (addressNode) => {
+    const wif = addressNode.toWIF();
+    const keyPair = bitcoin.ECPair.fromWIF(wif, this.network);
+    const { address } = bitcoin.payments.p2pkh({
+      pubkey: keyPair.publicKey,
+      network: this.network,
+    });
+    return address;
+  };
 
   getBalanceForAccountXpubs = (xpubs = []) => {};
 
