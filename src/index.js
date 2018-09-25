@@ -1,14 +1,20 @@
-import BitcoinHDWallet from './bitcoinHDWallet';
+import BitcoinHDWallet from './bitcoin';
 
 // delete below code. Only for testing
-const bitcoinHDWallet = new BitcoinHDWallet({ mnemonics: 'rajesh soni', testnet: true });
-const { masterNode, masterPublickKey } = bitcoinHDWallet.getMasterNode();
-const { coinTypeNode, coinTypePublicKey } = bitcoinHDWallet.getCoinTypeNode(masterNode);
-const { accountNode, accountPublicKey } = bitcoinHDWallet.getAccountNode(coinTypeNode, 0);
-const { addressNode } = bitcoinHDWallet.getAddressNode(accountNode, 0, 0, 0);
+const main = async () => {
+  const bitcoinHDWallet = new BitcoinHDWallet({ mnemonics: 'rajesh soni', testnet: true });
+  const currentAccountIndex = await bitcoinHDWallet.runAccountDiscovery();
+  console.log('>>>', currentAccountIndex);
+};
 
-console.log('::>', masterPublickKey, coinTypePublicKey, accountPublicKey);
-console.log('>>>', bitcoinHDWallet.generateAddress(addressNode));
+main();
+// const { addressNode } = bitcoinHDWallet.getAddressNode({
+//   accountIndex: 0,
+//   change: 0,
+//   addressIndex: 0,
+// });
+
+// console.log('>>>', bitcoinHDWallet.generateAddress(addressNode));
 // delete above code.
 
 export default {

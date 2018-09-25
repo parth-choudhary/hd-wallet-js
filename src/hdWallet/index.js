@@ -1,12 +1,11 @@
 import bip32 from 'bip32';
 import bip39 from 'bip39';
 
-import { PURPOSE } from './constants';
+import { PURPOSE } from '../constants';
 
 /**
  * Since we have access to hdNode at each path, we use it to derive further required values.
  * Everything (apart from the masterPublicKey) can also be derived from it's parent's xpub.
- *
  * @class HDWallet
  */
 class HDWallet {
@@ -14,11 +13,14 @@ class HDWallet {
     this.mnemonics = mnemonics;
     this.network = network;
     this.coinType = coinType;
+
+    // get master and coinType node once initialized
+    this.masterNodeObj = this.getMasterNode();
+    this.coinTypeNodeObj = this.getCoinTypeNode();
   }
 
   /**
    * The masterPublicKey can be used as the key to store hdTree in localStorage
-   *
    * @memberof HDWallet
    */
   getMasterNode = () => {
@@ -30,6 +32,7 @@ class HDWallet {
     return {
       masterNode,
       masterPublickKey,
+      derivationPath: "m/44'",
       path: {
         purpose: PURPOSE,
       },
@@ -38,16 +41,17 @@ class HDWallet {
 
   /**
    * Get coinType node, hardened derived from masterNode
-   *
    * @memberof HDWallet
    */
-  getCoinTypeNode = (masterNode) => {
-    const coinTypeNode = masterNode.deriveHardened(this.coinType); // equiv to m/44'/0'
+  getCoinTypeNode = () => {
+    // equiv to m/44'/0'
+    const coinTypeNode = this.masterNodeObj.masterNode.deriveHardened(this.coinType);
     const coinTypePublicKey = coinTypeNode.neutered().toBase58();
 
     return {
       coinTypeNode,
       coinTypePublicKey,
+      derivationPath: `m/44'/${this.coinType}'`,
       path: {
         purpose: PURPOSE,
         coinType: this.coinType,
@@ -60,13 +64,15 @@ class HDWallet {
    * accountIndex refers to the account, in hd wallet user can have multiple accounts
    * @memberof HDWallet
    */
-  getAccountNode = (coinTypeNode, accountIndex) => {
-    const accountNode = coinTypeNode.deriveHardened(accountIndex); // equiv to m/44'/0'/0'
+  getAccountNode = ({ accountIndex }) => {
+    // equiv to m/44'/0'/0'
+    const accountNode = this.coinTypeNodeObj.coinTypeNode.deriveHardened(accountIndex);
     const accountPublicKey = accountNode.neutered().toBase58();
 
     return {
       accountNode,
       accountPublicKey,
+      derivationPath: `m/44'/${this.coinType}'/${accountIndex}'`,
       path: {
         purpose: PURPOSE,
         coinType: this.coinType,
@@ -77,23 +83,35 @@ class HDWallet {
 
   /**
    * Generate address (internal or external) from accountNode.
-   * change is either 0 (external) or 1 (internal)
-   *
+   * changeIndex is either 0 (external) or 1 (internal)
    * @memberof HDWallet
    */
-  getAddressNode = (accountNode, accountIndex, change, addressIndex) => {
-    const addressNode = accountNode.derive(change).derive(addressIndex); // equiv to m/44'/0'/0'/0/0
+  getAddressNode = ({
+    accountNode = null, accountIndex, changeIndex = 0, addressIndex,
+  }) => {
+    let _accountNode = accountNode;
+    if (!_accountNode) {
+      _accountNode = this.coinTypeNodeObj.coinTypeNode.deriveHardened(accountIndex);
+    }
+
+    // equiv m/44'/0'/0'/0/0
+    const addressNode = _accountNode.derive(changeIndex).derive(addressIndex);
     return {
       addressNode,
+      derivationPath: `m/44'/${this.coinType}'/${accountIndex}'/${changeIndex}/${addressIndex}`,
       path: {
         purpose: PURPOSE,
         coinType: this.coinType,
         account: accountIndex,
-        change,
+        changeIndex,
         addressIndex,
       },
     };
   };
+
+  createHDTree = () => {};
+
+  loadHDTree = () => {};
 
   getCurrentReceiveAddress = () => {};
 
