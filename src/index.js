@@ -3,13 +3,16 @@ import BitcoinHDWallet from './bitcoin';
 // delete below code. Only for testing
 const main = async () => {
   const bitcoinHDWallet = new BitcoinHDWallet({ mnemonics: 'rajesh soni', testnet: true });
-  console.log(
-    '>>>---',
-    await bitcoinHDWallet.convertBTCToFiat({
-      fiatCode: 'INR',
-      satoshis: 100000000,
-    }),
-  );
+  const ctree = await bitcoinHDWallet.runFullScan(false);
+  console.log(bitcoinHDWallet.getCurrentReceiveAddress(ctree));
+  console.log(bitcoinHDWallet.getCurrentChangeAddress(ctree));
+  // console.log(
+  //   '>>>---',
+  //   await bitcoinHDWallet.convertBTCToFiat({
+  //     fiatCode: 'INR',
+  //     satoshis: 100000000,
+  //   }),
+  // );
 
   // const { addressNode } = bitcoinHDWallet.getAddressNode({
   //   accountIndex: 0,

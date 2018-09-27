@@ -191,11 +191,10 @@ class BitcoinHDWallet extends HDWallet {
    * @memberof BitcoinHDWallet
    * @private
    */
-  scan = async (extensive = false) => {
+  scan = async (extensive = false, isNew = true) => {
     typeforce('Boolean', extensive);
 
     let currAccountIndex = null;
-    let currAccountPublicKey = null;
     let accountTree = {};
 
     for (let accountIndex = 0; accountIndex <= MAX_ACCOUNT_INDEX; accountIndex += 1) {
@@ -270,7 +269,6 @@ class BitcoinHDWallet extends HDWallet {
           // this set of 20 addresses do not have any txn associated with them
           if (!accountHasTxns) {
             currAccountIndex = accountIndex;
-            currAccountPublicKey = accountPublicKey;
           }
           break;
         } else {
@@ -319,8 +317,19 @@ class BitcoinHDWallet extends HDWallet {
       totalSent += accountObj.totalSent;
     });
 
+    let _currAccountIndex = currAccountIndex;
+    if (isNew) {
+      if (currAccountIndex !== 0) {
+        _currAccountIndex -= 1;
+      }
+    }
+
+    const { accountPublicKey: currAccountPublicKey } = this.getAccountNode({
+      accountIndex: _currAccountIndex,
+    });
+
     return {
-      currAccountIndex,
+      currAccountIndex: _currAccountIndex,
       currAccountPublicKey,
       accountTree,
       balance,
@@ -330,12 +339,50 @@ class BitcoinHDWallet extends HDWallet {
     };
   };
 
+  getCurrentReceiveAddress = (coinTree) => {
+    typeforce('Object', coinTree);
+
+    const { currAccountIndex, currAccountPublicKey, accountTree } = coinTree;
+    const { externalAddresses } = accountTree[currAccountPublicKey];
+    const { addressNode, derivationPath, path } = this.getAddressNode({
+      accountIndex: currAccountIndex,
+      changeIndex: 0,
+      addressIndex: externalAddresses.length,
+    });
+
+    const address = this.generateAddress(addressNode);
+    return {
+      address,
+      path,
+      derivationPath,
+    };
+  };
+
+  getCurrentChangeAddress = (coinTree) => {
+    typeforce('Object', coinTree);
+
+    const { currAccountIndex, currAccountPublicKey, accountTree } = coinTree;
+    const { internalAddresses } = accountTree[currAccountPublicKey];
+    const { addressNode, derivationPath, path } = this.getAddressNode({
+      accountIndex: currAccountIndex,
+      changeIndex: 1,
+      addressIndex: internalAddresses.length,
+    });
+
+    const address = this.generateAddress(addressNode);
+    return {
+      address,
+      path,
+      derivationPath,
+    };
+  };
+
   /**
    * This method must be called whenever you need to recreate full coinTree
    * It returns the full coinTree
    * @memberof BitcoinHDWallet
    */
-  runFullScan = () => this.scan(true);
+  runFullScan = (isNew = true) => this.scan(true, isNew);
 
   /**
    * This method must be called when them master seed is imported from an external source

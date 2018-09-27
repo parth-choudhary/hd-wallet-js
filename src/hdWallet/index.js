@@ -120,8 +120,6 @@ class HDWallet {
     };
   };
 
-  createHDTree = () => {};
-
   loadHDTree = () => {};
 
   getCurrentReceiveAddress = () => {};
