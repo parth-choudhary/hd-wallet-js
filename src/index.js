@@ -15,12 +15,12 @@ const main = async () => {
   //   console.log(e);
   // }
 
-  // const currentAccountIndex = await bitcoinHDWallet.runAccountDiscovery();
-  // console.log('>>>', currentAccountIndex);
+  const currentAccountIndex = await bitcoinHDWallet.runAccountDiscovery();
+  console.log('>>>', currentAccountIndex);
 
-  const xpubBalance = await bitcoinHDWallet.getBalanceForAccountXpubs([]);
+  // const xpubBalance = await bitcoinHDWallet.getBalanceForAccountXpubs([]);
 
-  console.log(xpubBalance);
+  // console.log(xpubBalance);
   // const miningFee = await bitcoinHDWallet.getMiningFeeRate();
   // console.log('>>', miningFee);
 };

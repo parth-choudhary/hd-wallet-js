@@ -66,27 +66,58 @@ class BitcoinHDWallet extends HDWallet {
    * @memberof BitcoinHDWallet
    * @todo Extract all addresses for further processing and make this dry for use in full scan
    */
-  runAccountDiscovery = async () => {
+  runAccountDiscovery = async (extensive = false) => {
     let currAccountIndex = null;
+    let currAccountPublicKey = null;
+    let accountTree = {};
+
     for (let accountIndex = 0; accountIndex <= MAX_ACCOUNT_INDEX; accountIndex += 1) {
       if (currAccountIndex) {
         break;
       }
 
+      const {
+        accountNode,
+        accountPublicKey,
+        derivationPath: accountDerivationPath,
+        path: accountPath,
+      } = this.getAccountNode({
+        accountIndex,
+      });
+
+      // initalise new accountIndex address holder
+      accountTree = {
+        ...accountTree,
+        [accountPublicKey]: {
+          key: accountPublicKey,
+          path: accountPath,
+          derivationPath: accountDerivationPath,
+          externalAddresses: [],
+          internalAddresses: [],
+        },
+      };
+
       let addressIndex = 0;
       let accountHasTxns = false;
       while (true) {
-        const addresses = range(addressIndex, addressIndex + GAP_LIMIT).map((index) => {
-          const { addressNode } = this.getAddressNode({
+        const externalAddresses = range(addressIndex, addressIndex + GAP_LIMIT).map((index) => {
+          const { addressNode, derivationPath, path } = this.getAddressNode({
+            accountNode,
             accountIndex,
             changeIndex: 0,
             addressIndex: index,
           });
-          return this.generateAddress(addressNode);
+
+          const address = this.generateAddress(addressNode);
+          return {
+            address,
+            path,
+            derivationPath,
+          };
         });
 
         const { success, data, error } = await apiServices.get(
-          `${this.apis.addressesInfo}?active=${addresses.join('|')}`,
+          `${this.apis.addressesInfo}?active=${externalAddresses.map(a => a.address).join('|')}`,
         );
 
         if (!success) {
@@ -97,23 +128,41 @@ class BitcoinHDWallet extends HDWallet {
           // this set of 20 addresses do not have any txn associated with them
           if (!accountHasTxns) {
             currAccountIndex = accountIndex;
+            currAccountPublicKey = accountPublicKey;
           }
           break;
         } else {
           accountHasTxns = true;
-          // find last address index having n_tx > 0
+          // find last address index having n_tx > 0 and
+          // store unique address obj in traversed addresses obj
           let lastAddressIndex = -1;
-          addresses.forEach((address, index) => {
-            const addressInfo = find(data.addresses, { address });
+          externalAddresses.forEach((addressObj, index) => {
+            const addressInfo = find(data.addresses, { address: addressObj.address });
             if (addressInfo.n_tx > 0) {
               lastAddressIndex = index;
+            }
+
+            if (
+              !find(accountTree[accountPublicKey].externalAddresses, {
+                address: addressObj.address,
+              })
+            ) {
+              accountTree[accountPublicKey].externalAddresses.push({
+                ...addressInfo,
+                ...addressObj,
+              });
             }
           });
           addressIndex += lastAddressIndex + 1;
         }
       }
     }
-    return currAccountIndex;
+
+    return {
+      currAccountIndex,
+      currAccountPublicKey,
+      accountTree,
+    };
   };
 
   /**
