@@ -9,6 +9,7 @@ export const testnetConfig = {
   apis: {
     minigFee: 'https://bitcoinfees.earn.com/api/v1/fees/recommended',
     addressesInfo: 'https://testnet.blockchain.info/multiaddr',
+    toBTC: 'https://blockchain.info/tobtc',
     multiAddrsUTXOs: 'https://testnet.blockexplorer.com/api/addrs/utxo',
     broadCastTxn: 'https://testnet.blockexplorer.com/api/tx/send',
     queryTxn: 'https://testnet.blockexplorer.com/api/tx/',
@@ -28,6 +29,7 @@ export const mainnetConfig = {
   apis: {
     minigFee: 'https://bitcoinfees.earn.com/api/v1/fees/recommended',
     addressesInfo: 'https://blockchain.info/multiaddr',
+    toBTC: 'https://blockchain.info/tobtc',
     multiAddrsUTXOs: 'https://blockexplorer.com/api/addrs/utxo',
     broadCastTxn: 'https://blockexplorer.com/api/tx/send',
     queryTxn: 'https://blockexplorer.com/api/tx/',

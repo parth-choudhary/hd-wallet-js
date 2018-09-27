@@ -41,7 +41,14 @@ class BitcoinHDWallet extends HDWallet {
    */
   convertSatoshisToBitcoins = (satoshis) => {
     typeforce('Number', satoshis);
+
     return satoshis / this.units.value;
+  };
+
+  convertBitcoinsToSatoshis = (btc) => {
+    typeforce('Number', btc);
+
+    return Math.round(btc * this.units.value);
   };
 
   /**
@@ -51,6 +58,7 @@ class BitcoinHDWallet extends HDWallet {
    */
   generateAddress = (addressNode) => {
     typeforce('Object', addressNode);
+
     const wif = addressNode.toWIF();
     const keyPair = bitcoin.ECPair.fromWIF(wif, this.network);
     const { address } = bitcoin.payments.p2pkh({
@@ -61,18 +69,137 @@ class BitcoinHDWallet extends HDWallet {
   };
 
   /**
-   * This method must be called when them master seed is imported from an external source
-   * It returns the current accountIndex
+   * Utility function to generate multiple addresses
    * @memberof BitcoinHDWallet
-   * @todo Extract all addresses for further processing and make this dry for use in full scan
+   * @private
    */
-  runAccountDiscovery = async (extensive = false) => {
+  generateMultipleAddresses = ({
+    startAddressIndex,
+    endAddressIndex,
+    accountNode,
+    accountIndex,
+    changeIndex,
+  }) => range(startAddressIndex, endAddressIndex).map((index) => {
+    typeforce('Number', startAddressIndex);
+    typeforce('Number', endAddressIndex);
+    typeforce('Object', accountNode);
+    typeforce('Number', accountIndex);
+    typeforce('Number', changeIndex);
+
+    const { addressNode, derivationPath, path } = this.getAddressNode({
+      accountNode,
+      accountIndex,
+      changeIndex,
+      addressIndex: index,
+    });
+
+    const address = this.generateAddress(addressNode);
+    return {
+      address,
+      path,
+      derivationPath,
+    };
+  });
+
+  /**
+   * Utility function to get multiple addresses info from blockchain.info
+   * @memberof BitcoinHDWallet
+   * @private
+   */
+  getMultiAddressInfo = async (addresses) => {
+    typeforce(['Object'], addresses);
+
+    const { success, data, error } = await apiServices.get(
+      `${this.apis.addressesInfo}?active=${addresses.map(a => a.address).join('|')}`,
+    );
+    if (!success) {
+      throw new Error(error);
+    }
+    return data;
+  };
+
+  /**
+   * Utility function to update account tree summary (balance, txs, totalRecieved, totalSent)
+   * @memberof BitcoinHDWallet
+   * @private
+   */
+  updateAccountTreeSummary = ({ accountTree, accountPublicKey, remoteData }) => {
+    typeforce('Object', accountTree);
+    typeforce('String', accountPublicKey);
+    typeforce('Object', remoteData);
+
+    return {
+      ...accountTree,
+      [accountPublicKey]: {
+        ...accountTree[accountPublicKey],
+        txs: accountTree[accountPublicKey].txs + remoteData.wallet.n_tx,
+        balance: accountTree[accountPublicKey].balance + remoteData.wallet.final_balance,
+        totalReceived:
+          accountTree[accountPublicKey].totalReceived + remoteData.wallet.total_received,
+        totalSent: accountTree[accountPublicKey].totalSent + remoteData.wallet.total_sent,
+      },
+    };
+  };
+
+  /**
+   * Utility function to update account tree addresses
+   * @memberof BitcoinHDWallet
+   * @private
+   */
+  updateAccountTreeAddresses = ({
+    accountTree,
+    accountPublicKey,
+    addresses,
+    addressesKey,
+    remoteData,
+  }) => {
+    typeforce('Object', accountTree);
+    typeforce('String', accountPublicKey);
+    typeforce(['Object'], addresses);
+    typeforce('String', addressesKey);
+    typeforce('Object', remoteData);
+
+    let lastAddressIndex = -1;
+    const newAccountTree = { ...accountTree };
+    addresses.forEach((addressObj, index) => {
+      const addressInfo = find(remoteData.addresses, {
+        address: addressObj.address,
+      });
+      if (addressInfo.n_tx > 0) {
+        lastAddressIndex = index;
+      }
+
+      if (
+        !find(newAccountTree[accountPublicKey][addressesKey], {
+          address: addressObj.address,
+        })
+      ) {
+        newAccountTree[accountPublicKey][addressesKey].push({
+          ...addressInfo,
+          ...addressObj,
+        });
+      }
+    });
+
+    return {
+      accountTree: newAccountTree,
+      lastAddressIndex,
+    };
+  };
+
+  /**
+   * @memberof BitcoinHDWallet
+   * @private
+   */
+  scan = async (extensive = false) => {
+    typeforce('Boolean', extensive);
+
     let currAccountIndex = null;
     let currAccountPublicKey = null;
     let accountTree = {};
 
     for (let accountIndex = 0; accountIndex <= MAX_ACCOUNT_INDEX; accountIndex += 1) {
-      if (currAccountIndex) {
+      if (currAccountIndex !== null) {
         break;
       }
 
@@ -89,6 +216,10 @@ class BitcoinHDWallet extends HDWallet {
       accountTree = {
         ...accountTree,
         [accountPublicKey]: {
+          txs: 0,
+          balance: 0,
+          totalReceived: 0,
+          totalSent: 0,
           key: accountPublicKey,
           path: accountPath,
           derivationPath: accountDerivationPath,
@@ -100,31 +231,42 @@ class BitcoinHDWallet extends HDWallet {
       let addressIndex = 0;
       let accountHasTxns = false;
       while (true) {
-        const externalAddresses = range(addressIndex, addressIndex + GAP_LIMIT).map((index) => {
-          const { addressNode, derivationPath, path } = this.getAddressNode({
+        // internal
+        let internalAddresses = [];
+        let fetchedInternalData = {};
+        if (extensive) {
+          internalAddresses = this.generateMultipleAddresses({
+            startAddressIndex: addressIndex,
+            endAddressIndex: addressIndex + GAP_LIMIT,
             accountNode,
             accountIndex,
-            changeIndex: 0,
-            addressIndex: index,
+            changeIndex: 1,
           });
 
-          const address = this.generateAddress(addressNode);
-          return {
-            address,
-            path,
-            derivationPath,
-          };
-        });
-
-        const { success, data, error } = await apiServices.get(
-          `${this.apis.addressesInfo}?active=${externalAddresses.map(a => a.address).join('|')}`,
-        );
-
-        if (!success) {
-          throw new Error(error);
+          fetchedInternalData = await this.getMultiAddressInfo(internalAddresses);
+          accountTree = this.updateAccountTreeSummary({
+            accountTree,
+            accountPublicKey,
+            remoteData: fetchedInternalData,
+          });
         }
 
-        if (data.txs.length === 0) {
+        // external
+        const externalAddresses = this.generateMultipleAddresses({
+          startAddressIndex: addressIndex,
+          endAddressIndex: addressIndex + GAP_LIMIT,
+          accountNode,
+          accountIndex,
+          changeIndex: 0,
+        });
+        const fetchedExternalData = await this.getMultiAddressInfo(externalAddresses);
+        accountTree = this.updateAccountTreeSummary({
+          accountTree,
+          accountPublicKey,
+          remoteData: fetchedExternalData,
+        });
+
+        if (fetchedExternalData.txs.length === 0) {
           // this set of 20 addresses do not have any txn associated with them
           if (!accountHasTxns) {
             currAccountIndex = accountIndex;
@@ -134,35 +276,75 @@ class BitcoinHDWallet extends HDWallet {
         } else {
           accountHasTxns = true;
           // find last address index having n_tx > 0 and
-          // store unique address obj in traversed addresses obj
-          let lastAddressIndex = -1;
-          externalAddresses.forEach((addressObj, index) => {
-            const addressInfo = find(data.addresses, { address: addressObj.address });
-            if (addressInfo.n_tx > 0) {
-              lastAddressIndex = index;
-            }
-
-            if (
-              !find(accountTree[accountPublicKey].externalAddresses, {
-                address: addressObj.address,
-              })
-            ) {
-              accountTree[accountPublicKey].externalAddresses.push({
-                ...addressInfo,
-                ...addressObj,
-              });
-            }
-          });
+          // store unique external address obj in traversed addresses obj
+          const { accountTree: newAccountTree, lastAddressIndex } = this.updateAccountTreeAddresses(
+            {
+              accountTree,
+              accountPublicKey,
+              addresses: externalAddresses,
+              addressesKey: 'externalAddresses',
+              remoteData: fetchedExternalData,
+            },
+          );
+          accountTree = newAccountTree;
           addressIndex += lastAddressIndex + 1;
+
+          // internal addresses chain
+          if (extensive) {
+            // store unique internal address obj in traversed addresses obj
+            const { accountTree: newAccountTreeAlt } = this.updateAccountTreeAddresses({
+              accountTree,
+              accountPublicKey,
+              addresses: internalAddresses,
+              addressesKey: 'internalAddresses',
+              remoteData: fetchedInternalData,
+            });
+            accountTree = newAccountTreeAlt;
+          }
         }
       }
     }
+
+    // calculate balance, txs, totalReceived, totalSent at global level (for cointTree)
+    let balance = 0;
+    let txs = 0;
+    let totalReceived = 0;
+    let totalSent = 0;
+
+    Object.keys(accountTree).forEach((accountKey) => {
+      const accountObj = accountTree[accountKey];
+      balance += accountObj.balance;
+      txs += accountObj.txs;
+      totalReceived += accountObj.totalReceived;
+      totalSent += accountObj.totalSent;
+    });
 
     return {
       currAccountIndex,
       currAccountPublicKey,
       accountTree,
+      balance,
+      txs,
+      totalReceived,
+      totalSent,
     };
+  };
+
+  /**
+   * This method must be called whenever you need to recreate full coinTree
+   * It returns the full coinTree
+   * @memberof BitcoinHDWallet
+   */
+  runFullScan = () => this.scan(true);
+
+  /**
+   * This method must be called when them master seed is imported from an external source
+   * It returns the current accountIndex
+   * @memberof BitcoinHDWallet
+   */
+  runAccountDiscovery = async () => {
+    const coinTree = await this.scan(false);
+    return coinTree.currAccountIndex;
   };
 
   /**
@@ -172,6 +354,7 @@ class BitcoinHDWallet extends HDWallet {
    */
   getBalanceForAccountXpubs = async (xpubs = []) => {
     typeforce(['String'], xpubs);
+
     if (xpubs.length === 0) return 0;
     const { success, data, error } = await apiServices.get(
       `${this.apis.addressesInfo}?active=${xpubs.join('|')}`,
@@ -182,9 +365,49 @@ class BitcoinHDWallet extends HDWallet {
     return data.wallet.final_balance;
   };
 
-  getBalanceForAddresses = (addresses = []) => {};
+  /**
+   * Converts provided fiatValue to equivalent satoshis
+   * @memberof BitcoinHDWallet
+   */
+  convertFiatToBTC = async ({ fiatCode, fiatValue }) => {
+    typeforce('String', fiatCode);
+    typeforce('Number', fiatValue);
 
-  fetchUTXOs = async (addresses = []) => {};
+    const { success, data, error } = await apiServices.get(
+      `${this.apis.toBTC}?currency=${fiatCode}&value=${fiatValue}`,
+    );
+
+    if (!success) {
+      throw new Error(error);
+    }
+    return {
+      bitcoins: data,
+      satoshis: this.convertBitcoinsToSatoshis(data),
+    };
+  };
+
+  /**
+   * Converts provided satoshis to equivalent fiat
+   * @memberof BitcoinHDWallet
+   */
+  convertBTCToFiat = async ({ fiatCode, satoshis }) => {
+    typeforce('String', fiatCode);
+    typeforce('Number', satoshis);
+
+    const { success, data, error } = await apiServices.get(
+      `${this.apis.toBTC}?currency=${fiatCode}&value=1`,
+    );
+
+    if (!success) {
+      throw new Error(error);
+    }
+
+    const fiatValue = satoshis / this.convertBitcoinsToSatoshis(data);
+    return {
+      fiat: fiatValue,
+      [fiatCode]: fiatValue,
+    };
+  };
 
   /**
    * Get mining fee rate

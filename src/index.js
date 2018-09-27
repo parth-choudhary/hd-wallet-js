@@ -3,6 +3,14 @@ import BitcoinHDWallet from './bitcoin';
 // delete below code. Only for testing
 const main = async () => {
   const bitcoinHDWallet = new BitcoinHDWallet({ mnemonics: 'rajesh soni', testnet: true });
+  console.log(
+    '>>>---',
+    await bitcoinHDWallet.convertBTCToFiat({
+      fiatCode: 'INR',
+      satoshis: 100000000,
+    }),
+  );
+
   // const { addressNode } = bitcoinHDWallet.getAddressNode({
   //   accountIndex: 0,
   //   change: 0,
@@ -15,8 +23,8 @@ const main = async () => {
   //   console.log(e);
   // }
 
-  const currentAccountIndex = await bitcoinHDWallet.runAccountDiscovery();
-  console.log('>>>', currentAccountIndex);
+  // const currentAccountIndex = await bitcoinHDWallet.runFullScan();
+  // console.log('>>>', currentAccountIndex);
 
   // const xpubBalance = await bitcoinHDWallet.getBalanceForAccountXpubs([]);
 
