@@ -481,7 +481,27 @@ class BitcoinHDWallet extends HDWallet {
    * It returns the full coinTree
    * @memberof BitcoinHDWallet
    */
-  runFullScan = (isNew = true) => this.scan(true, isNew);
+  runFullScan = (oldCoinTree, isNew = true) => {
+    const coinTree = this.scan(true, isNew);
+    if (
+      oldCoinTree
+      && oldCoinTree.accountTree[coinTree.currAccountPublicKey].internalAddresses.length
+        > coinTree.accountTree[coinTree.currAccountPublicKey].internalAddresses.length
+    ) {
+      return {
+        ...coinTree,
+        accountTree: {
+          ...coinTree.accountTree,
+          [coinTree.currAccountPublicKey]: {
+            ...coinTree.accountTree[coinTree.currAccountPublicKey],
+            internalAddresses:
+              oldCoinTree.accountTree[coinTree.currAccountPublicKey].internalAddresses,
+          },
+        },
+      };
+    }
+    return coinTree;
+  };
 
   /**
    * This method must be called when them master seed is imported from an external source
@@ -489,7 +509,7 @@ class BitcoinHDWallet extends HDWallet {
    * @memberof BitcoinHDWallet
    */
   runAccountDiscovery = async () => {
-    const coinTree = await this.scan(false);
+    const coinTree = await this.scan(false, true);
     return coinTree.currAccountIndex;
   };
 

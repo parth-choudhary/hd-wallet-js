@@ -4,7 +4,8 @@ import BitcoinHDWallet from './bitcoin';
 const main = async () => {
   const bitcoinHDWallet = new BitcoinHDWallet({ mnemonics: 'rajesh soni', testnet: true });
   const ctree = await bitcoinHDWallet.runFullScan(false);
-  console.log(await bitcoinHDWallet.getAllTransactions(ctree));
+  console.log(ctree);
+  // console.log(await bitcoinHDWallet.getAllTransactions(ctree));
   // console.log(ctree);
   // const targets = [
   //   {
