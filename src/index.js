@@ -4,8 +4,36 @@ import BitcoinHDWallet from './bitcoin';
 const main = async () => {
   const bitcoinHDWallet = new BitcoinHDWallet({ mnemonics: 'rajesh soni', testnet: true });
   const ctree = await bitcoinHDWallet.runFullScan(false);
-  console.log(bitcoinHDWallet.getCurrentReceiveAddress(ctree));
-  console.log(bitcoinHDWallet.getCurrentChangeAddress(ctree));
+  console.log(await bitcoinHDWallet.getAllTransactions(ctree));
+  // console.log(ctree);
+  // const targets = [
+  //   {
+  //     address: 'mz14T4PuLC3eRbqkotTFGxocGf3fdBu5jz',
+  //     value: 10000,
+  //   },
+  // ];
+  // const d = await bitcoinHDWallet.createRawTransaction({ coinTree: ctree, targets });
+  // console.log('>>>>', d);
+  // const utxos = await bitcoinHDWallet.fetchUTXOs([
+  //   ...ctree.accountTree[ctree.currAccountPublicKey].externalAddresses,
+  //   ...ctree.accountTree[ctree.currAccountPublicKey].internalAddresses,
+  // ]);
+  // console.log(utxos);
+
+  // const feeRate = await bitcoinHDWallet.getMiningFeeRate('fastestFee');
+  // const { inputs, outputs, fee } = bitcoinHDWallet.selectInputUTXOsForTransaction({
+  //   inputUTXOs: utxos,
+  //   feeRate,
+  //   targets,
+  // });
+  // console.log(inputs, outputs, fee);
+  // const currAddress = bitcoinHDWallet.getCurrentReceiveAddress(ctree);
+  // const currChangeAddress = bitcoinHDWallet.getCurrentChangeAddress(ctree);
+
+  // console.log('>>>', ctree);
+  // console.log('.............\n');
+  // console.log(await bitcoinHDWallet.storeCurrReceiveAddressInCoinTree(currAddress, ctree, true));
+
   // console.log(
   //   '>>>---',
   //   await bitcoinHDWallet.convertBTCToFiat({

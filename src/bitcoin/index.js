@@ -51,6 +51,13 @@ class BitcoinHDWallet extends HDWallet {
     return Math.round(btc * this.units.value);
   };
 
+  generateKeyPairFromAddressNode = (addressNode) => {
+    typeforce('Object', addressNode);
+
+    const wif = addressNode.toWIF();
+    return bitcoin.ECPair.fromWIF(wif, this.network);
+  };
+
   /**
    * Get addressNode from HDWallet base class implementation
    * Generate wallet address from addressNode for bitcoin and family
@@ -59,8 +66,8 @@ class BitcoinHDWallet extends HDWallet {
   generateAddress = (addressNode) => {
     typeforce('Object', addressNode);
 
-    const wif = addressNode.toWIF();
-    const keyPair = bitcoin.ECPair.fromWIF(wif, this.network);
+    const keyPair = this.generateKeyPairFromAddressNode(addressNode);
+
     const { address } = bitcoin.payments.p2pkh({
       pubkey: keyPair.publicKey,
       network: this.network,
@@ -318,7 +325,8 @@ class BitcoinHDWallet extends HDWallet {
     });
 
     let _currAccountIndex = currAccountIndex;
-    if (isNew) {
+    if (!isNew) {
+      // this scan is meant to reconstruct tree and not to derive it for the first time
       if (currAccountIndex !== 0) {
         _currAccountIndex -= 1;
       }
@@ -339,6 +347,12 @@ class BitcoinHDWallet extends HDWallet {
     };
   };
 
+  /**
+   * Get current receive address.
+   * This will always get you the next address from what is already stored in the
+   * accountTree externalAddresses chain
+   * @memberof BitcoinHDWallet
+   */
   getCurrentReceiveAddress = (coinTree) => {
     typeforce('Object', coinTree);
 
@@ -358,6 +372,55 @@ class BitcoinHDWallet extends HDWallet {
     };
   };
 
+  /**
+   * If you are calling this API, be sure of what you are doing, this does not
+   * check for gap limit (as of now), so if you use force, it will always append
+   * current addres in external address chain.
+   * The right way is to call full scan, as it will automatically create the complete
+   * chain.
+   * @memberof BitcoinHDWallet
+   */
+  storeCurrReceiveAddressInCoinTree = async (address, coinTree, force = false) => {
+    typeforce('Object', address);
+    typeforce('Object', coinTree);
+
+    const { currAccountIndex, currAccountPublicKey, accountTree } = coinTree;
+    const { addresses } = await this.getMultiAddressInfo([address]);
+    const addressInfo = addresses[0];
+    // if there was no tx associated with current address, skip storing it until forced
+    if (addressInfo.n_tx === 0) {
+      if (!force) {
+        return coinTree;
+      }
+    }
+
+    return {
+      currAccountIndex,
+      currAccountPublicKey,
+      accountTree: {
+        ...accountTree,
+        [currAccountPublicKey]: {
+          ...accountTree[currAccountPublicKey],
+          txs: accountTree[currAccountPublicKey].txs + addressInfo.n_tx,
+          balance: accountTree[currAccountPublicKey].balance + addressInfo.final_balance,
+          totalReceived:
+            accountTree[currAccountPublicKey].totalReceived + addressInfo.total_received,
+          totalSent: accountTree[currAccountPublicKey].totalSent + addressInfo.total_sent,
+          externalAddresses: [
+            ...accountTree[currAccountPublicKey].externalAddresses,
+            { ...addressInfo, ...address },
+          ],
+        },
+      },
+    };
+  };
+
+  /**
+   * Get current change address.
+   * This will always get you the next address from what is already stored in the
+   * accountTree externalAddresses chain
+   * @memberof BitcoinHDWallet
+   */
   getCurrentChangeAddress = (coinTree) => {
     typeforce('Object', coinTree);
 
@@ -374,6 +437,42 @@ class BitcoinHDWallet extends HDWallet {
       address,
       path,
       derivationPath,
+    };
+  };
+
+  /**
+   * called just after the transaction is published successfully.
+   * @assumption since transaction is published successfully, each change address will have
+   * something in it (some txn)
+   * @memberof BitcoinHDWallet
+   * @todo write separate gap limited scan for change addresses
+   */
+  storeCurrentChangeAddress = async (address, coinTree) => {
+    typeforce('Object', address);
+    typeforce('Object', coinTree);
+
+    const { currAccountIndex, currAccountPublicKey, accountTree } = coinTree;
+    const { addresses } = await this.getMultiAddressInfo([address]);
+    const addressInfo = addresses[0];
+
+    return {
+      currAccountIndex,
+      currAccountPublicKey,
+      accountTree: {
+        ...accountTree,
+        [currAccountPublicKey]: {
+          ...accountTree[currAccountPublicKey],
+          txs: accountTree[currAccountPublicKey].txs + addressInfo.n_tx,
+          balance: accountTree[currAccountPublicKey].balance + addressInfo.final_balance,
+          totalReceived:
+            accountTree[currAccountPublicKey].totalReceived + addressInfo.total_received,
+          totalSent: accountTree[currAccountPublicKey].totalSent + addressInfo.total_sent,
+          internalAddresses: [
+            ...accountTree[currAccountPublicKey].internalAddresses,
+            { ...addressInfo, ...address },
+          ],
+        },
+      },
     };
   };
 
@@ -410,6 +509,44 @@ class BitcoinHDWallet extends HDWallet {
       throw new Error(error);
     }
     return data.wallet.final_balance;
+  };
+
+  /**
+   * Utility function to get transaction history for given addresses
+   * @memberof BitcoinHDWallet
+   */
+  getTransactionsForAddresses = async (addresses = []) => {
+    typeforce(['String'], addresses);
+
+    if (addresses.length === 0) return [];
+    const { success, data, error } = await apiServices.get(
+      `${this.apis.addressesInfo}?active=${addresses.join('|')}`,
+    );
+    if (!success) {
+      throw new Error(error);
+    }
+
+    return data.txs;
+  };
+
+  /**
+   * Utility function to get transaction history for provided coinTree
+   * @memberof BitcoinHDWallet
+   */
+  getAllTransactions = async (coinTree) => {
+    typeforce('Object', coinTree);
+
+    const xpubs = Object.keys(coinTree.accountTree);
+    if (xpubs.length === 0) return [];
+
+    const { success, data, error } = await apiServices.get(
+      `${this.apis.addressesInfo}?active=${xpubs.join('|')}`,
+    );
+    if (!success) {
+      throw new Error(error);
+    }
+
+    return data.txs;
   };
 
   /**
@@ -464,6 +601,7 @@ class BitcoinHDWallet extends HDWallet {
    */
   getMiningFeeRate = async (variant = 'fastestFee') => {
     typeforce('String', variant);
+
     const variants = ['fastestFee', 'halfHourFee', 'hourFee'];
     if (!variants.includes(variant)) {
       throw new TypeError(`variant must be one of ${variants.join(', ')}`);
@@ -475,6 +613,108 @@ class BitcoinHDWallet extends HDWallet {
     }
     return data[variant];
   };
+
+  /**
+   * Utility function to fetch utxos for provided addresses
+   * @memberof BitcoinHDWallet
+   */
+  fetchUTXOs = async (addresses) => {
+    typeforce(['Object'], addresses);
+
+    if (addresses.length === 0) {
+      return [];
+    }
+
+    const { success, data: utxos, error } = await apiServices.get(
+      this.apis.addressesUTXOs.replace('{{addresses}}', addresses.map(a => a.address).join(',')),
+    );
+    if (!success) {
+      throw new Error(error);
+    }
+
+    return utxos.map(utxo => ({
+      ...utxo,
+      value: utxo.satoshis,
+      ...find(addresses, { address: utxo.address }),
+    }));
+  };
+
+  /**
+   * Utility method to combine inputUTXOs so that their value is equal or larger than
+   * target value
+   * @memberof BitcoinHDWallet
+   */
+  selectInputUTXOsForTransaction = ({ inputUTXOs, feeRate, targets }) => {
+    typeforce(['Object'], inputUTXOs);
+    typeforce('Number', feeRate);
+    typeforce(['Object'], targets);
+
+    const { inputs, outputs, fee } = coinSelect(inputUTXOs, targets, feeRate);
+    if (!inputs || !outputs) {
+      throw new Error('Unable to combine input utxos for this output ');
+    }
+
+    return {
+      inputs,
+      outputs,
+      fee,
+    };
+  };
+
+  createRawTransaction = async ({ coinTree, targets, feeRateVariant = 'fastestFee' }) => {
+    typeforce('Object', coinTree);
+    typeforce(['Object'], targets);
+    typeforce('String', feeRateVariant);
+
+    // aggregate all addresses stored in coinTree
+    let addresses = [];
+    Object.keys(coinTree.accountTree).forEach((accountPublicKey) => {
+      addresses = [
+        ...addresses,
+        ...coinTree.accountTree[accountPublicKey].externalAddresses,
+        ...coinTree.accountTree[accountPublicKey].internalAddresses,
+      ];
+    });
+
+    const inputUTXOs = await this.fetchUTXOs(addresses);
+    const feeRate = await this.getMiningFeeRate(feeRateVariant);
+    const { inputs, outputs, fee } = this.selectInputUTXOsForTransaction({
+      inputUTXOs,
+      feeRate,
+      targets,
+    });
+
+    // create transaction
+    const txb = new bitcoin.TransactionBuilder(this.network);
+    inputs.forEach(input => txb.addInput(input.txid, input.vout));
+    outputs.forEach((output) => {
+      if (!output.address) {
+        // get change address to send remaining output to it
+        // eslint-disable-next-line
+        output.address = this.getCurrentChangeAddress(coinTree).address;
+      }
+      txb.addOutput(output.address, output.value);
+    });
+
+    // sign transaction
+    inputs.forEach((input, ind) => {
+      const addressNode = this.deriveNode(input.derivationPath);
+      const keyPair = this.generateKeyPairFromAddressNode(addressNode);
+      txb.sign(ind, keyPair);
+    });
+
+    return {
+      rawTxHex: txb.build().toHex(),
+      fee,
+    };
+  };
+
+  broadCastTxn = async (coinTree, rawTxHex) => {
+    typeforce('Object', coinTree);
+    typeforce('String', rawTxHex);
+
+    
+  }
 }
 
 export default BitcoinHDWallet;

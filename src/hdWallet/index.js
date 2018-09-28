@@ -120,17 +120,12 @@ class HDWallet {
     };
   };
 
-  loadHDTree = () => {};
-
-  getCurrentReceiveAddress = () => {};
-
-  getCurrentChangeAddress = () => {};
-
-  incrementRecieveAddress = () => {};
-
-  incrementChangeAddress = () => {};
-
-  runFullScanForAccount = () => {};
+  deriveNode = (derivationPath) => {
+    const seed = bip39.mnemonicToSeed(this.mnemonics);
+    const root = bip32.fromSeed(seed, this.network);
+    const node = root.derivePath(derivationPath);
+    return node;
+  };
 }
 
 export default HDWallet;

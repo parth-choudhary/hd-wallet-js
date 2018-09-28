@@ -10,8 +10,9 @@ export const testnetConfig = {
     minigFee: 'https://bitcoinfees.earn.com/api/v1/fees/recommended',
     addressesInfo: 'https://testnet.blockchain.info/multiaddr',
     toBTC: 'https://blockchain.info/tobtc',
-    multiAddrsUTXOs: 'https://testnet.blockexplorer.com/api/addrs/utxo',
+    addressesUTXOs: 'https://testnet.blockexplorer.com/api/addrs/{{addresses}}/utxo',
     broadCastTxn: 'https://testnet.blockexplorer.com/api/tx/send',
+
     queryTxn: 'https://testnet.blockexplorer.com/api/tx/',
     confirmedBalance: 'https://testnet.blockexplorer.com/api/addr/{{address}}/balance',
     unConfirmedBalance: 'https://testnet.blockexplorer.com/api/{{address}}/unconfirmedBalance',
@@ -30,8 +31,9 @@ export const mainnetConfig = {
     minigFee: 'https://bitcoinfees.earn.com/api/v1/fees/recommended',
     addressesInfo: 'https://blockchain.info/multiaddr',
     toBTC: 'https://blockchain.info/tobtc',
-    multiAddrsUTXOs: 'https://blockexplorer.com/api/addrs/utxo',
+    addressesUTXOs: 'https://testnet.blockexplorer.com/api/addrs/{{addresses}}/utxo',
     broadCastTxn: 'https://blockexplorer.com/api/tx/send',
+
     queryTxn: 'https://blockexplorer.com/api/tx/',
     confirmedBalance: 'https://blockexplorer.com/api/addr/{{address}}/balance',
     unConfirmedBalance: 'https://blockexplorer.com/api/{{address}}/unconfirmedBalance',
