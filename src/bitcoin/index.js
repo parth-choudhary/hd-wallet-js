@@ -447,10 +447,10 @@ class BitcoinHDWallet extends HDWallet {
    * @memberof BitcoinHDWallet
    * @todo write separate gap limited scan for change addresses
    */
-  storeCurrentChangeAddress = async (address, coinTree) => {
-    typeforce('Object', address);
+  storeCurrentChangeAddress = async (coinTree) => {
     typeforce('Object', coinTree);
 
+    const address = this.getCurrentChangeAddress(coinTree);
     const { currAccountIndex, currAccountPublicKey, accountTree } = coinTree;
     const { addresses } = await this.getMultiAddressInfo([address]);
     const addressInfo = addresses[0];
@@ -661,6 +661,11 @@ class BitcoinHDWallet extends HDWallet {
     };
   };
 
+  /**
+   * Create raw transaction for given targets
+   * targets = [{ address = '', value = ''}]
+   * @memberof BitcoinHDWallet
+   */
   createRawTransaction = async ({ coinTree, targets, feeRateVariant = 'fastestFee' }) => {
     typeforce('Object', coinTree);
     typeforce(['Object'], targets);
@@ -709,12 +714,44 @@ class BitcoinHDWallet extends HDWallet {
     };
   };
 
+  /**
+   * Publish raw transaction
+   * This returns txid and new updated cointree
+   * @memberof BitcoinHDWallet
+   */
   broadCastTxn = async (coinTree, rawTxHex) => {
     typeforce('Object', coinTree);
     typeforce('String', rawTxHex);
 
-    
-  }
+    const { success, data, error } = await apiServices.post(this.apis.broadCastTxn, {
+      rawtx: rawTxHex,
+    });
+
+    if (!success) {
+      throw new Error(error);
+    }
+
+    // store change address
+    const newCoinTree = this.storeCurrentChangeAddress(coinTree);
+
+    // @todo: there might be need to run full scan here to update coinTree
+    return {
+      cointTree: newCoinTree,
+      txid: data,
+    };
+  };
+
+  getTransactionDetails = async (txid) => {
+    typeforce('String', txid);
+
+    const { success, data, error } = await apiServices.get(`${this.apis.queryTxn}${txid}`);
+
+    if (!success) {
+      throw new Error(error);
+    }
+
+    return data;
+  };
 }
 
 export default BitcoinHDWallet;

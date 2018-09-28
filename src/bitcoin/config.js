@@ -12,8 +12,8 @@ export const testnetConfig = {
     toBTC: 'https://blockchain.info/tobtc',
     addressesUTXOs: 'https://testnet.blockexplorer.com/api/addrs/{{addresses}}/utxo',
     broadCastTxn: 'https://testnet.blockexplorer.com/api/tx/send',
-
     queryTxn: 'https://testnet.blockexplorer.com/api/tx/',
+
     confirmedBalance: 'https://testnet.blockexplorer.com/api/addr/{{address}}/balance',
     unConfirmedBalance: 'https://testnet.blockexplorer.com/api/{{address}}/unconfirmedBalance',
   },
@@ -33,8 +33,8 @@ export const mainnetConfig = {
     toBTC: 'https://blockchain.info/tobtc',
     addressesUTXOs: 'https://testnet.blockexplorer.com/api/addrs/{{addresses}}/utxo',
     broadCastTxn: 'https://blockexplorer.com/api/tx/send',
-
     queryTxn: 'https://blockexplorer.com/api/tx/',
+
     confirmedBalance: 'https://blockexplorer.com/api/addr/{{address}}/balance',
     unConfirmedBalance: 'https://blockexplorer.com/api/{{address}}/unconfirmedBalance',
   },
