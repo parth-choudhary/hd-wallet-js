@@ -68,6 +68,4 @@ import BitcoinHDWallet from './bitcoin';
 // main();
 // delete above code.
 
-export default {
-  BitcoinHDWallet,
-};
+export { BitcoinHDWallet };
